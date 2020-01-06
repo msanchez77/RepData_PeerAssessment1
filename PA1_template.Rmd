@@ -5,21 +5,159 @@ output:
     keep_md: true
 ---
 
-
 ## Loading and preprocessing the data
+  1. Load the data
+```{r}
+    fitdata <- read.csv("./activity.csv")
+```
 
+  2. Process/transform the data into a format suitable for analysis
+  
+  Here I will convert the class of the 'date' column from factor to character. This will make it easier to work with.
+```{r}
+    fitdata$date <- as.character(fitdata$date)
+```
 
 
 ## What is mean total number of steps taken per day?
+  1. Calculate the total number of steps taken per day
+```{r}
+    as.data.frame.table(tapply(fitdata$steps, fitdata$date, sum, na.rm=TRUE))
+```
 
+  
+  2. Make a histogram of the total number of steps taken each day
+```{r}
+    steps_date <- tapply(fitdata$steps, fitdata$date, sum, na.rm=TRUE)
+    steps_date <- as.data.frame.table(steps_date)
+    names(steps_date) <- c("Date", "Steps")
+    
+    library(ggplot2)
+    ggp <- ggplot(steps_date, aes(factor(Date), Steps)) +
+        geom_bar(stat="identity") +
+        theme_bw() + guides(fill=FALSE) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        labs(y="Number of Steps", title="Total number of steps taken each day")
+    
+    print(ggp)
+```
 
+  3. Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+    fitdata2 <- read.csv("./activity.csv", colClasses = c("numeric", "character", "numeric"), na.strings=c("NA", "0"))
+    ## Next I want to replace the NA that is taking up the 0 entry in the interval column. I had to change the behavior of the dataframe to treat 0's as NA because if I didn't the median of all dates would = 0, and the instructions say to ignore missing values.
+    mean_steps <- as.data.frame.table(tapply(fitdata2$steps, fitdata2$date, mean, na.rm=TRUE))
+    median_steps <- as.data.frame.table(tapply(fitdata2$steps, fitdata2$date, median, na.rm=TRUE))
+    
+    print(mean_steps)
+    
+    print(median_steps)
+```
 
 ## What is the average daily activity pattern?
 
+  1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+  
+```{r}
+    ## The 0th interval was replaced with an NA value by the last read.csv call, so here I change those row's intervals back to 0
+    fitdata2$interval[is.na(fitdata2$interval)] <- 0
+    steps_interval <- tapply(fitdata2$steps, fitdata2$interval, mean, na.rm=TRUE)
+    steps_interval <- as.data.frame.table(steps_interval)
+    names(steps_interval) <- c("Interval", "Steps")
+    
+    steps_interval$Interval[is.na(steps_interval$Interval)] <- 0
+    steps_interval$Steps[is.na(steps_interval$Steps)] <- 0
+    
+    with(steps_interval, plot(Interval, Steps, type="l", main="Average Number of Steps Taken Each 5-minute Interval Across All Days", xlab="5-minute interval within day", ylab="Average Number of Steps"))
+    with(steps_interval, lines(stats::lowess(steps_interval)))
+```
+  
+  2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+ 
+```{r}
+    max_index <- which.max(steps_interval$Steps)
 
+    steps_interval$Interval[max_index]
+```
 
 ## Imputing missing values
+  1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r}
+    fitdata3 <- read.csv("./activity.csv")
+    sum(is.na(fitdata3))
+```
+
+  2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
 
 
+    Replace each NA value with the mean for that 5-minute interval
 
+  
+  3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+    fitdata_imputed <- fitdata3
+    for (i in 1:nrow(fitdata_imputed)) {
+      if (is.na(fitdata_imputed$steps[i])) {
+        interval_value <- fitdata_imputed$interval[i]
+        steps_value <- steps_interval[steps_interval$Interval == interval_value,]
+        fitdata_imputed$steps[i] <- steps_value$Steps
+      }
+    }
+```
+  
+  4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r}
+
+    ## Histogram
+    steps_date_complete <- tapply(fitdata_imputed$steps, fitdata_imputed$date, sum, na.rm=TRUE)
+    steps_date_complete <- as.data.frame.table(steps_date_complete)
+    names(steps_date_complete) <- c("Date", "Steps")
+    
+    library(ggplot2)
+    ggp <- ggplot(steps_date_complete, aes(factor(Date), Steps)) +
+        geom_bar(stat="identity") +
+        theme_bw() + guides(fill=FALSE) +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+        labs(y="Number of Steps", title="Total number of steps taken each day")
+    
+    print(ggp)
+    
+    
+    ## Mean/Median
+    mean_steps <- as.data.frame.table(tapply(fitdata_imputed$steps, fitdata_imputed$date, mean, na.rm=TRUE))
+    median_steps <- as.data.frame.table(tapply(fitdata_imputed$steps, fitdata_imputed$date, median, na.rm=TRUE))
+    
+    print(mean_steps)
+    
+    print(median_steps)
+
+```
+  
 ## Are there differences in activity patterns between weekdays and weekends?
+  1. Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+  
+```{r}
+    library(lubridate)
+    fitdata4 <- fitdata_imputed
+    fitdata4$weekday <- !(wday(ymd(fitdata4$date), label=TRUE) %in% c("Sat", "Sun"))
+    fitdata4$weekday <- as.factor(fitdata4$weekday)
+    levels(fitdata4$weekday) <- c("weekend", "weekday")
+    
+    head(fitdata4)
+    table(fitdata4$weekday)
+
+```
+  
+  
+  2. Make a panel plot containing a time series plot (i.e. type="l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+```{r}
+    avgSteps <- aggregate(fitdata4$steps, list(interval = as.numeric(as.character(fitdata4$interval)), weekday = fitdata4$weekday), FUN = "mean")
+names(avgSteps)[3] <- "meanOfSteps"
+    library(lattice)
+    xyplot(avgSteps$meanOfSteps ~ avgSteps$interval | avgSteps$weekday, layout = c(1, 2), type = "l", xlab = "Interval", ylab = "Number of steps")
+
+```
+
+
+
